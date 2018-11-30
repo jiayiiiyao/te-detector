@@ -1,105 +1,7 @@
-from __future__ import print_function
+from tedet_insertion import*
 
-import optparse
-import operator
-import bisect
-import signal
-import sys
-
-class Alignment:
-    aligncount = 0
-    def __init__(self, refChr, refStart, refEnd, refLen, refSeq,
-                 qryName, qryStart, qryEnd, qryLen, qrySeq):
-        self.refChr, self.refStart, self.refEnd, self.refLen, self.refSeq = refChr, refStart, refEnd, refLen, refSeq
-        self.qryName, self.qryStart, self.qryEnd, self.qryLen, self.qrySeq= qryName, qryStart, qryEnd, qryLen, qrySeq
-        Alignment.aligncount += 1
-
-
-class Transposon:
-    def __init__(self, genoName, genoStart, genoEnd, strand,
-                  repName, repClass, repFamily, repStart, repEnd):
-        self.genoName, self.genoStart, self.genoEnd, self.strand = genoName, genoStart, genoEnd, strand
-        self.repName, self.repClass, self.repFamily, self.repStart, self.repEnd = repName, repClass, repFamily, repStart, repEnd
-
-# read/write file
-
-def openAndLog(fileName):
-    f = open(fileName)
-    sys.stderr.write("reading " + fileName + "..." + "\n")
-    return f
-
-def writeAndLog(fileName):
-    f = open(fileName, 'w')
-    sys.stderr.write("writing " + fileName + "..." + "\n")
-    return f
-
-# read Alignments
-
-def readBlockFromMaf(lines):
-    block = []
-    for line in lines:
-        if line.isspace():
-            if block:
-                yield block
-                block = []
-        elif line[0] != '#':
-            block.append(line)
-    if block:
-        yield block
-
-def readAlignments(filename):
-    alignments = {}
-    blocks = readBlockFromMaf(openAndLog(filename))
-    for block in blocks:
-        refname, refstart, refend, reflen, refseq = parseAlignments(block[1].split())
-        qryname, qrystart, qryend, qrylen, qryseq = parseAlignments(block[2].split())
-        align = Alignment(refname, refstart, refend, reflen, refseq, qryname, qrystart, qryend, qrylen, qryseq)
-        alist = alignments.get(refname)
-        if alist == None:
-            alist = []
-        alist.append(align)
-        alignments[refname] = alist
-    return alignments
-
-def parseAlignments(fields):
-    name = fields[1]
-    start, lens = int(fields[2]), int(fields[3])
-    seq = fields[6]
-    end = start + len(seq) - seq.count('-')
-    return name, start, end, lens, seq
-
-# read repeats
-def readRepeats(filename):
-    repeats = {}
-    file = openAndLog(filename)
-    for line in file:
-        attributes = line.split()
-        genoName = attributes[5]
-        genoStart, genoEnd = int(attributes[6]), int(attributes[7])
-        strand, repName, repClass, repFamily, repStart, repEnd = attributes[9:15]
-        # ignore Simple_repeat and Low_complexity
-        #if repFamily != 'Simple_repeat' and repFamily != 'Low_complexity':
-        if not repFamily == ' ':
-            transposon = Transposon(genoName, genoStart, genoEnd, strand, repName,
-                            repClass, repFamily, repStart, repEnd)
-            tlist = repeats.get(genoName)
-            if tlist == None:
-                tlist = []
-            tlist.append(transposon)
-            repeats[genoName] = tlist
-    file.close()
-    for chr in repeats.keys():
-       repeats[chr].sort(key = operator.attrgetter('genoStart'))
-    return repeats
 
 # check if annotated
-
-def getRefStartPoints(alignlist):
-    alist = []
-    for align in alignlist:
-        alist.append(align.refStart)
-    return alist
-
 def getCandidateTE(telist, refstart):
     startpoints = []
     tes = []
@@ -119,21 +21,21 @@ def checkCandidates(pairs, repeats):
     negative = []
     for pair in pairs:
         a, insertion = pair[0], pair[1] 
-        insertionstart, insertionend = int(insertion[3]), int(insertion[4])
-        donarstart = a.refStart
-        donarend = a.refEnd
+        insertionstart, insertionend = insertion.insertionStart, insertion.insertionEnd
+        donorstart = a.refStart
+        donorend = a.refEnd
         refchr = a.refChr
         if refchr in repeats.keys(): 
-            cans = getCandidateTE(repeats[refchr], donarstart)
+            cans = getCandidateTE(repeats[refchr], donorstart)
             #cans = repeats[refchr]
             for te in cans:
                 testart, teend = te.genoStart, te.genoEnd
-                if donarstart <= te.genoStart and donarend >= te.genoEnd:
+                if donorstart <= te.genoStart and donorend >= te.genoEnd:
                     transduction = checkTransduction(a, insertionend, te) 
                     res = a, te, insertion, transduction                   
                     positive_full.append(res)
                     
-                elif (te.genoStart <= donarstart and te.genoEnd <= donarend and te.genoEnd > donarstart):
+                elif (te.genoStart <= donorstart and te.genoEnd <= donorend and te.genoEnd > donorstart):
                     transduction = checkTransduction(a, insertionend, te)
                     res = a, te, insertion, transduction
                     positive_partial.append(res)
@@ -168,6 +70,18 @@ def readInsertions(insertionfile):
             insertions[readname] = ilist
     return insertions
 
+def parseInsertions(insertionlist):
+    insertions = {}
+    for insert in insertionlist:
+        readname = insert.readName
+        ilist = insertions.get(readname)
+        if not ilist:
+            ilist = []
+        #data = align1.refChr, align1.refEnd, align1.qryName, align1.qryEnd, align2.qryStart, tsd[0], tsd[1], tsd[2], tsd[3]
+        ilist.append(insert)
+        insertions[readname] = ilist
+    return insertions
+
 def selectedFromAlignments(alignments, insertions):
     selected = []
     for alignlist in alignments.values():
@@ -176,9 +90,9 @@ def selectedFromAlignments(alignments, insertions):
             if readname in insertions.keys():
                 ilist = insertions[readname]
                 for i in ilist:
-                    insertstart, insertend = int(i[3]), int(i[4])
+                    insertstart, insertend = i.insertionStart, i.insertionEnd
                     if (abs(insertstart - readstart) <= 50 and abs(insertend - readend) <= 50) :
-                        pair = align, i, readname
+                        pair = align, i
                         selected.append(pair)
     return selected
 
@@ -199,8 +113,8 @@ def logNegative(filename, result):
     outfile = writeAndLog(filename)
     for r in result:
         align, insert = r[0:2]
-        acc_chr, acc_site, donar_chr, donar_start, donar_end = insert[0], insert[1], align.refChr, align.refStart, align.refEnd
-        data = donar_chr, donar_start, donar_end, align.qryName, align.qryStart, align.qryEnd
+        target_chr, target_site, donor_chr, donor_start, donor_end = insert.targetChr, insert.targetSite, align.refChr, align.refStart, align.refEnd
+        data = donor_chr, donor_start, donor_end, align.qryName, align.qryStart, align.qryEnd
         print(*data, sep='\t', end='\n', file=outfile)
     outfile.close()
 
@@ -208,36 +122,27 @@ def logPositive(filename, result):
     outfile = writeAndLog(filename)
     for r in result:
         align, te, insert, transduction = r[0:4]
-        acc_chr, acc_site, donar_chr, donar_start, donar_end = insert[0], insert[1], align.refChr, align.refStart, align.refEnd
-        data1 = acc_chr, acc_site, donar_chr, donar_start, donar_end, align.qryName, align.qryStart, align.qryEnd, insert[3], insert[4]
+        tsd = insert.TSD
+        target_chr, target_site, donor_chr, donor_start, donor_end = insert.targetChr, insert.targetSite, align.refChr, align.refStart, align.refEnd
+        data1 = target_chr, target_site, donor_chr, donor_start, donor_end, align.qryName, align.qryStart, align.qryEnd, insert.insertionStart, insert.insertionEnd
         data2 = te.repName, te.repClass, te.repFamily, te.genoStart, te.genoEnd
-        data3 = insert[5], insert[6], insert[7], insert[8], transduction[0], transduction[1]
+        data3 = tsd.length, tsd.seq, tsd.left_flanking, tsd.right_flanking, transduction[0], transduction[1]
         print(*data1, sep='\t', end='\n', file=outfile)
         print(*data2, sep='\t', end='\n', file=outfile)
         print(*data3, sep='\t', end='\n', file=outfile)
         outfile.write('\n')
     outfile.close()
 
-def logInsertion(filename, result):
-    outfile = writeAndLog(filename)
-    for r in result:
-        align = r[0]
-        aligndata = align.qryName, align.qryStart, align.qryEnd, align.refChr, align.refStart, align.refEnd
-        insert = r[1][0:]
-        print(*aligndata, sep='\t', end='\n', file=outfile)
-        print(*insert, sep='\t', end='\n', file=outfile)
-        outfile.write('\n')
-    outfile.close()
 
 
 def findTE(args):
     alignments = readAlignments(args[0])
     repeats = readRepeats(args[1])
-    insertions = readInsertions(args[2])
+    insertions = parseInsertions(findInsertion(alignments))
     sys.stderr.write("insertions: " + str(len(insertions)) + '\n')
-    outputfile = args[3]
+    outputfile = args[2]
     selectedPairs = selectedFromAlignments(alignments, insertions)
-    logInsertion(outputfile+"_insertion", selectedPairs)
+   # logInsertion(outputfile+"_insertion", selectedPairs)
     sys.stderr.write("selectedPairs: " + str(len(selectedPairs)) + '\n')
     positive_full, positive_partial, negative = checkCandidates(selectedPairs, repeats)
     sys.stderr.write("positive_full: " + str(len(positive_full)) + '\n')
@@ -254,8 +159,8 @@ if __name__ == "__main__":
     description = "Try to find transposable elements insertion."
     op = optparse.OptionParser(description=description)
     args = op.parse_args()[1]
-    if len(args) < 4:
-        op.error("please give me alignments in MAF format, RepeatAnnnotation, Insertionlist, and OutputDirectory")
+    if len(args) < 3:
+        op.error("please give me alignments in MAF format, RepeatAnnnotation, and OutputDirectory")
     findTE(args)
 
 
