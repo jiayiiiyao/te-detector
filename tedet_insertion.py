@@ -8,19 +8,16 @@ import sys
 
 class Alignment:
     aligncount = 0
-
     def __init__(self, refChr, refStart, refEnd, refLen, refSeq,
-                 myName, myStart, myEnd, myLen, mySeq):
-
+                 qryName, qryStart, qryEnd, qryLen, qrySeq):
         self.refChr, self.refStart, self.refEnd, self.refLen, self.refSeq = refChr, refStart, refEnd, refLen, refSeq
-        self.myName, self.myStart, self.myEnd, self.myLen, self.mySeq= myName, myStart, myEnd, myLen, mySeq
+        self.qryName, self.qryStart, self.qryEnd, self.qryLen, self.qrySeq= qryName, qryStart, qryEnd, qryLen, qrySeq
         Alignment.aligncount += 1
 
 
 class Transposon:
     def __init__(self, genoName, genoStart, genoEnd, strand,
                   repName, repClass, repFamily, repStart, repEnd):
-
         self.genoName, self.genoStart, self.genoEnd, self.strand = genoName, genoStart, genoEnd, strand
         self.repName, self.repClass, self.repFamily, self.repStart, self.repEnd = repName, repClass, repFamily, repStart, repEnd
 
@@ -78,7 +75,7 @@ def getRefStartPoints(alignlist):
 
 
 def getAdjacent(alist, end):
-    tsd = 15 # target site duplication here 
+    tsd = 30 # target site duplication here 
     startpoints = getRefStartPoints(alist)
     pos = bisect.bisect_right(startpoints, end)
     if pos != len(startpoints) and pos >= 2:
@@ -89,11 +86,10 @@ def getAdjacent(alist, end):
 
 def checkGap(align1, align2):
     bias = 200
-    myname1, myname2 = align1.myName, align2.myName
-    if myname1 == myname2:
-        end = align1.myEnd
-        start = align2.myStart
-        #if abs(start - end) > bias:
+    qryname1, qryname2 = align1.qryName, align2.qryName
+    if qryname1 == qryname2:
+        end = align1.qryEnd
+        start = align2.qryStart
         if (start - end) > bias:
             return True
     return False
@@ -118,20 +114,18 @@ def logInsertion(filename, results):
     for r in results:
         align1, align2 = r[0], r[1]
         acceptor = align1.refChr, align1.refEnd, align1.refStart
-        read = align1.myName, align1.myEnd, align2.myStart
+        read = align1.qryName, align1.qryEnd, align2.qryStart
         if align1.refEnd > align2.refStart:
             tsd_length = align1.refEnd - align2.refStart
             reverse = -1*tsd_length
-            tsd_1 = align1.mySeq[reverse:0]
-            tsd_2 = align2.mySeq[0:tsd_length]
+            tsd = align2.refSeq[0:tsd_length]
+            flanking_left = align1.refSeq[-1*(tsd_length+10):-1*tsd_length] 
+            flanking_right = align2.refSeq[tsd_length:tsd_length+10] 
         else:
-            tsd_length = 0
-            tsd_1, tsd_2 = " ", " "
-        tsd = tsd_length, tsd_1, tsd_2
-        print(*acceptor, sep='\t', end='\n', file=outfile)
-        print(*read, sep='\t', end='\n', file=outfile)
-        print(*tsd, sep='\t', end='\n', file=outfile)
-        outfile.write('\n')
+            tsd_length = align1.refEnd - align2.refStart
+            tsd, flanking_left, flanking_right = "N", "N", "N"
+        data = align1.refChr, align1.refEnd, align2.refStart, align1.qryName, align1.qryEnd, align2.qryStart, tsd_length, tsd, flanking_left, flanking_right
+        print(*data, sep='\t', end='\n', file=outfile)
 
 
 def tedet_insertions(args):
@@ -143,12 +137,12 @@ def tedet_insertions(args):
 
 if __name__ == "__main__":
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-    usage = "alignments.maf outputfile"
-    description = "Try to find insertions."
+    usage = "Alignments.maf OutputDirectory"
+    description = "Try to find insertions in reads."
     op = optparse.OptionParser (description=description)
     args = op.parse_args()[1]
     if len(args) < 2:
-        op.error("please give me MAF alignments and outputfile")
+        op.error("please give me alignments in MAF format and Output Directory")
     tedet_insertions(args)
 
 
