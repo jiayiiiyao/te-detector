@@ -1,6 +1,5 @@
 from tedet_insertion import*
 
-
 # check if annotated
 def getCandidateTE(telist, refstart):
     startpoints = []
@@ -138,11 +137,14 @@ def logPositive(filename, result):
 def findTE(args):
     alignments = readAlignments(args[0])
     repeats = readRepeats(args[1])
-    insertions = parseInsertions(findInsertion(alignments))
-    sys.stderr.write("insertions: " + str(len(insertions)) + '\n')
+    ins = findInsertion_2(alignments)
+    #insertions = parseInsertions(findInsertion(alignments))
+    insertions = parseInsertions(ins)
+    sys.stderr.write("insertions: " + str(len(ins)) + '\n')
+    sys.stderr.write("parsed_insertions: " + str(len(insertions)) + '\n')
     outputfile = args[2]
     selectedPairs = selectedFromAlignments(alignments, insertions)
-   # logInsertion(outputfile+"_insertion", selectedPairs)
+    logInsertion(outputfile+"_insertion", ins)
     sys.stderr.write("selectedPairs: " + str(len(selectedPairs)) + '\n')
     positive_full, positive_partial, negative = checkCandidates(selectedPairs, repeats)
     sys.stderr.write("positive_full: " + str(len(positive_full)) + '\n')
@@ -155,13 +157,13 @@ def findTE(args):
 
 if __name__ == "__main__":
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
-    usage = "alignments.maf repeatsAnnotation insertionList outputdir"
+    usage = "alignments.maf repeatsAnnotation outputdir"
     description = "Try to find transposable elements insertion."
     op = optparse.OptionParser(description=description)
     args = op.parse_args()[1]
     if len(args) < 3:
         op.error("please give me alignments in MAF format, RepeatAnnnotation, and OutputDirectory")
-    findTE(args)
+    findTE(args)    
 
 
 

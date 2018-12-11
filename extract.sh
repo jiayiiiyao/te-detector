@@ -8,8 +8,8 @@ shift ||{
 sed 's/^>/> /' "$@" |
 
 awk '
-BEGIN {while (getline < "'"$insertion"'") a[$4] = 1}
-/^>/ {i = $4 in a} i
+BEGIN {while (getline < "'"$insertion"'") a[$1] = 1}
+/^>/ {i = $2 in a} i
 ' |
 
 sed 's/^> />/'
