@@ -25,7 +25,7 @@ class Insertion:
 	def __init__(self, targetChr, targetSite, readName, insertionStart, insertionEnd, TSD):
 		self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionEnd, self.TSD = targetChr, targetSite, readName, insertionStart, insertionEnd, TSD
 	def getInfo(self):
-		data = self.targetChr, self.targetSite, self.readName,self.insertionStart, self.insertionEnd, self.TSD.length, self.TSD.seq, self.TSD.left_flanking, self.TSD.right_flanking
+		data = self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionEnd, self.TSD.length, self.TSD.seq, self.TSD.left_flanking, self.TSD.right_flanking
 		return data
 
 class TSD:
@@ -42,7 +42,11 @@ def writeAndLog(fileName):
     sys.stderr.write("writing " + fileName + "..." + "\n")
     return f
 
-# For reading Alignments
+def logReads(f, results):
+    for r in results:
+        print(r, end='\n', file=f)
+
+
 def readBlockFromMaf(lines):
     block = []
     for line in lines:
@@ -62,9 +66,10 @@ def parseAlignments(fields):
     end = start + len(seq) - seq.count('-')
     return name, start, end, lens, seq
 
-def readAlignments(filename):
+# Read Maf file into alignments<map> and sort according to refStart 
+def readAlignments(f):
     alignments = {}
-    blocks = readBlockFromMaf(openAndLog(filename))
+    blocks = readBlockFromMaf(f)
     for block in blocks:
         refname, refstart, refend, reflen, refseq = parseAlignments(block[1].split())
         qryname, qrystart, qryend, qrylen, qryseq = parseAlignments(block[2].split())
@@ -79,24 +84,28 @@ def readAlignments(filename):
     return alignments
 
 # read repeats
-def readRepeats(filename):
+def readRepeats(f):
     repeats = {}
-    file = openAndLog(filename)
-    for line in file:
+    for line in f:
         attributes = line.split()
         genoName = attributes[5]
         genoStart, genoEnd = int(attributes[6]), int(attributes[7])
         strand, repName, repClass, repFamily = attributes[9:13]
         if not repFamily == ' ':
-            transposon = Transposon(genoName, genoStart, genoEnd, strand, repName,
-                            repClass, repFamily)
+            transposon = Transposon(genoName, genoStart, genoEnd, strand, repName, repClass, repFamily)
             tlist = repeats.get(genoName)
             if tlist == None:
                 tlist = []
             tlist.append(transposon)
             repeats[genoName] = tlist
-    file.close()
     for chr in repeats.keys():
        repeats[chr].sort(key = operator.attrgetter('genoStart'))
     return repeats
 
+
+def checkGap(align1, align2):
+    bias = 100
+    if align1.qryName == align2.qryName:
+        if (align2.qryStart - align1.qryEnd) > bias:
+            return True
+    return False
