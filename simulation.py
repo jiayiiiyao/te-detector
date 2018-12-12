@@ -24,10 +24,12 @@ def readTarget(lines):
 		targets[genoName] = tlist
 	return targets
 
+#cut target transposon
 def convertSeq(seq, start, end):
 	length = end - start
-	mask = 'x'*length
-	seqNew = "".join((seq[:start], mask, seq[end:]))
+	#mask = 'x'*length
+	#seqNew = "".join((seq[:start], mask, seq[end:]))
+	seqNew = "".join((seq[:start], seq[end:]))
 	return seqNew
 
 def convertReference(file, targets):
@@ -50,20 +52,17 @@ def convertReference(file, targets):
 def writeRecords(records, outfile):
 	write(records, outfile, "fasta")
 
-def writeRecords_m(record, outfile):
-	write(record, outfile, "fasta")
-
 def simulate(args):
 	inputFile = args[0]
 	targets = readTarget(open(args[1]))
 	records= convertReference(inputFile, targets)
 	writeRecords(records, args[2])
-	#writeRecords(record_m, "modified")
+
 
 if __name__ == "__main__":
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     usage = "inFile.fa targets.txt outFile.fa"
-    description = "Try to delete targeted transposon."
+    description = "Delete targeted transposon."
     op = optparse.OptionParser(description=description)
     args = op.parse_args()[1]
     if len(args) < 3:
