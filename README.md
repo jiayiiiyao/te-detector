@@ -56,23 +56,35 @@ Here you can get three output file with prefix 'out' (modifiy it as you want)
 
 - out_insertion:
 
+```
 targetChr | targetSite | readname | insertionStart | insertionEnd | tsdLength | tsdSeq | leftFlankingSeq | rightFlankingSeq
+```
 
 - out_positive_full: (Full TE insertions are logged)
 
-Row 1:
+*Will fix the problem of duplicates later*
 
+> Row 1:
+
+```
 targetChr | targetSite | donorChr | donorStart | donorEnd | readname | readStart | readEnd | insertionStart | insertionEnd
+```
 
 (Here donorChr: donorStart-donorEnd and readname: readStart-readEnd are aligned)
 
-Row 2:
+> Row 2:
 
+```
 RepeatName | RepeatClass | RepeatFamily | RepeatStart | RepeatEnd
+```
 
-Row 3:
 
+> Row 3:
+
+```
  tsdLength | tsdSeq | leftFlankingSeq | rightFlankingSeq | 3'transductionLength | transductionSeq
+```
+
 
 - out_positive_partial: (Partial TE insertions due to 5' truncation are logged)
 
