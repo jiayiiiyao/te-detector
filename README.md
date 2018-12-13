@@ -54,6 +54,7 @@ python tedet_anno.py reads_redo.maf rmsk.txt out
 
 Here you can get three output file with prefix 'out' (modifiy it as you want)
 
+
 - **out_insertion**:
 
 ```
@@ -63,6 +64,7 @@ targetChr | targetSite | readname | insertionStart | insertionEnd | tsdLength | 
 Log insertions with abs(tsdLength) <= 30bp
 
 tsdLength < 0 means possible target site deletion, which should be check more carefully later.
+
 
 
 - **out_positive_full: (Full TE insertions are logged)**
@@ -89,6 +91,7 @@ RepeatName | RepeatClass | RepeatFamily | RepeatStart | RepeatEnd
 ```
  tsdLength | tsdSeq | leftFlankingSeq | rightFlankingSeq | 3'transductionLength | transductionSeq
 ```
+
 
 
 - **out_positive_partial: (Partial TE insertions due to 5' truncation are logged)**
