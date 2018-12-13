@@ -60,6 +60,11 @@ Here you can get three output file with prefix 'out' (modifiy it as you want)
 targetChr | targetSite | readname | insertionStart | insertionEnd | tsdLength | tsdSeq | leftFlankingSeq | rightFlankingSeq
 ```
 
+Log insertions with abs(tsdLength) <= 30bp
+
+tsdLength < 0 means possible target site deletion, which should be check more carefully later.
+
+
 - out_positive_full: (Full TE insertions are logged)
 
 *Will fix the problem of duplicates later*
