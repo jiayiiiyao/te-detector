@@ -22,7 +22,7 @@ last-train -P8 -Q0 mydb-wm reads.fa > reads-wm.par
 lastal -P8 -p reads-wm.par mydb-wm reads.fa | ../bin/last-split -m1 > reads-wm.maf
 ```
  
- Here we use '-m1' option to keep all alignments: not omitting any alignment whose probability of having the wrong genomic locus is higher than one threshold.
+ Here we use '-m1' option to keep all alignments: not omitting any alignment whose probability of having the wrong genomic locus is higher than some threshold
  
  ##### Step3: Detect insertions and extract relevant reads
  
