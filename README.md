@@ -42,15 +42,29 @@ Check [here](https://github.com/mcfrith/last-rna/blob/master/last-long-reads.md)
 
 `python tedet_anno.py reads_redo.maf rmsk.txt out`
 
-Here you can get three output file with prefix 'out' (modifiy as you want)
+Here you can get three output file with prefix 'out' (modifiy it as you want)
 
-out_insertion:
+- out_insertion:
 
-Log all detected insertions in such format:
+targetChr | targetSite | readname | insertionStart | insertionEnd | tsdLength | tsdSeq | leftFlankingSeq | rightFlankingSeq
 
-targetChr | targetSite | readname | insertionStart | insertionEnd | tsd_length | tsd_seq | leftFlanking | rightFlanking
+- out_positive_full: (Full TE insertions are logged)
 
-out_positive_full
+Row 1:
 
-out_positive_partial:
+targetChr | targetSite | donorChr | donorStart | donorEnd | readname | readStart | readEnd | insertionStart | insertionEnd
+
+(Here donorChr: donorStart-donorEnd and readname: readStart-readEnd are aligned)
+
+Row 2:
+
+RepeatName | RepeatClass | RepeatFamily | RepeatStart | RepeatEnd
+
+Row 3:
+
+ tsdLength | tsdSeq | leftFlankingSeq | rightFlankingSeq | 3'transductionLength | transductionSeq
+
+- out_positive_partial: (Partial TE insertions due to 5' truncation are logged)
+
+Same format as out_positive_full
 
