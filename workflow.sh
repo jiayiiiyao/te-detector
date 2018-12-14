@@ -16,10 +16,10 @@
 
 #Step2: Find insertions and extract relevant reads
 ##Find insertions and log readnames
-python tedet_insertion.py FAB45271_wm.maf > insertions.txt
+python tedet_insertion.py FAB45271_wm.maf readnames
 
 ## Extract reads
-sh extract insertions.txt FAB45271.fa > FAB45271_redo.fa
+sh extract.sh readnames FAB45271.fa FAB45271_redo.fa
 
 #Step3: Realign carefully without repeat-masking (reference vs. extracted_reads)
 ../bin/lastdb -P8 -uNEAR -R11 -c mydb hg38.fa
@@ -27,4 +27,4 @@ sh extract insertions.txt FAB45271.fa > FAB45271_redo.fa
 ../bin/lastal -P8 -p FAB45271_redo.par mydb FAB45271_redo.fa | ../bin/last-split -m1 > FAB45271_redo.maf
 
 #Step4: Check candidate insertions
-python tedet_anno.py FAB45271_redo.maf rmsk.txt > FAB45271_TE
+python tedet_anno.py FAB45271_redo.maf rmsk.txt FAB45271_TE
