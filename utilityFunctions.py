@@ -1,11 +1,13 @@
 from __future__ import print_function
-
+from itertools import groupby
 import bisect
+import logging
+import collections
 import signal
 import sys
 import optparse
 import operator
-import signal
+
 
 class Alignment:
     aligncount = 0
@@ -22,30 +24,27 @@ class Transposon:
         self.repName, self.repClass, self.repFamily = repName, repClass, repFamily
 
 class Insertion:
-	def __init__(self, targetChr, targetSite, readName, insertionStart, insertionEnd, TSD):
-		self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionEnd, self.TSD = targetChr, targetSite, readName, insertionStart, insertionEnd, TSD
+	def __init__(self, targetChr, targetSite, readName, insertionStart, insertionLength, TSD):
+		self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionLength, self.TSD = targetChr, targetSite, readName, insertionStart, insertionLength, TSD
 	def getInfo(self):
-		data = self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionEnd, self.TSD.length, self.TSD.seq, self.TSD.left_flanking, self.TSD.right_flanking
-		return data
+        	data = self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionLength
+        	return data
 
 class TSD:
 	def __init__(self, length, seq, left_flanking, right_flanking):
 		self.length, self.seq, self.left_flanking, self.right_flanking = length, seq, left_flanking, right_flanking
 
 def openAndLog(fileName):
-    f = open(fileName)
-    sys.stderr.write("reading " + fileName + "..." + "\n")
-    return f
+    logging.info("opening " + fileName + "..." + "\n")
+    return open(fileName)
 
 def writeAndLog(fileName):
-    f = open(fileName, 'w')
-    sys.stderr.write("writing " + fileName + "..." + "\n")
-    return f
+    logging.info("writing " + fileName + "..." + "\n")
+    return open(fileName, 'w')
 
 def logReads(f, results):
     for r in results:
         print(r, end='\n', file=f)
-
 
 def readBlockFromMaf(lines):
     block = []
@@ -66,46 +65,72 @@ def parseAlignments(fields):
     end = start + len(seq) - seq.count('-')
     return name, start, end, lens, seq
 
-# Read Maf file into alignments<map> and sort according to refStart 
 def readAlignments(f):
-    alignments = {}
+    alignments = collections.defaultdict(list)
     blocks = readBlockFromMaf(f)
     for block in blocks:
         refname, refstart, refend, reflen, refseq = parseAlignments(block[1].split())
         qryname, qrystart, qryend, qrylen, qryseq = parseAlignments(block[2].split())
         align = Alignment(refname, refstart, refend, reflen, refseq, qryname, qrystart, qryend, qrylen, qryseq)
-        alist = alignments.get(refname)
-        if alist == None:
-            alist = []
-        alist.append(align)
-        alignments[refname] = alist
-    for chr in alignments.keys():
-        alignments[chr].sort(key=operator.attrgetter('refStart'))
+        alignments[qryname].append(align)
     return alignments
 
-# read repeats
 def readRepeats(f):
-    repeats = {}
+    repeats = collections.defaultdict(list)
     for line in f:
         attributes = line.split()
         genoName = attributes[5]
         genoStart, genoEnd = int(attributes[6]), int(attributes[7])
         strand, repName, repClass, repFamily = attributes[9:13]
-        if not repFamily == ' ':
+        if not repFamily == 'Simple_repeat':
             transposon = Transposon(genoName, genoStart, genoEnd, strand, repName, repClass, repFamily)
-            tlist = repeats.get(genoName)
-            if tlist == None:
-                tlist = []
-            tlist.append(transposon)
-            repeats[genoName] = tlist
-    for chr in repeats.keys():
-       repeats[chr].sort(key = operator.attrgetter('genoStart'))
+            repeats[genoName].append(transposon)
+    for genoname in repeats.keys():
+       repeats[genoname].sort(key = operator.attrgetter('genoStart'))
     return repeats
 
 
-def checkGap(align1, align2):
-    bias = 100
-    if align1.qryName == align2.qryName:
-        if (align2.qryStart - align1.qryEnd) > bias:
-            return True
-    return False
+def logNegative(filename, result):
+    outfile = writeAndLog(filename)
+    for r in result:
+        align, insert = r[0:2]
+        target_chr, target_site, donor_chr, donor_start, donor_end = insert.targetChr, insert.targetSite, align.refChr, align.refStart, align.refEnd
+        data = donor_chr, donor_start, donor_end, align.qryName, align.qryStart, align.qryEnd
+        print(*data, sep='\t', end='\n', file=outfile)
+    outfile.close()
+
+def logMapped(filename, result):
+    outfile = writeAndLog(filename)
+    for r in result:
+        align, insert = r[0:2]
+        data = align.refChr, align.refStart, align.refEnd, align.qryName, align.qryStart, align.qryEnd, insert.targetChr, insert.insertionStart, insert.insertionLength
+        print(*data, sep='\t', end='\n', file=outfile)
+    outfile.close()
+
+def logPositive(filename, result):
+    outfile = writeAndLog(filename)
+    for r in result:
+        align, te, insert, transduction = r[0:4]
+        tsd = insert.TSD
+        target_chr, target_site, donor_chr, donor_start, donor_end = insert.targetChr, insert.targetSite, align.refChr, align.refStart, align.refEnd
+        data1 = target_chr, target_site, donor_chr, donor_start, donor_end, align.qryName, align.qryStart, align.qryEnd, insert.insertionStart, insert.insertionLength
+        data2 = te.repName, te.repClass, te.repFamily, te.genoStart, te.genoEnd
+        data3 = tsd.length, tsd.seq, tsd.left_flanking, tsd.right_flanking, transduction[0], transduction[1]
+        print(*data1, sep='\t', end='\n', file=outfile)
+        print(*data2, sep='\t', end='\n', file=outfile)
+        print(*data3, sep='\t', end='\n', file=outfile)
+        outfile.write('\n')
+    outfile.close()
+
+def logUnmapped(filename, results):
+    outfile = writeAndLog(filename)
+    for r in results:
+        data = r.getInfo()
+        print(*data, sep='\t', end='\n', file=outfile)   
+
+def logInsertions(results, f):
+    for name in results.keys():
+        rlist = results[name]
+        for r in rlist:
+            data = r.getInfo()
+            print(*data, sep='\t', end='\n', file=f)
