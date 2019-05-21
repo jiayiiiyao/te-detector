@@ -34,7 +34,8 @@ lastal -P8 -p reads-wm.par mydb-wm reads.fa | ../bin/last-split -m1 > reads-wm.m
  python tedet_insertion.py [reads-wm.maf] [insertions]
  ```
  
- >Output format:
+ 
+Output format:
  
  >target-chr | target-site | readname | start-in-read | insertion-length | overlap/gap
  
@@ -48,10 +49,11 @@ python cluster-insertion.py [insertions] [cluster-size] [out]
 ```
 Log only clusters with size >= cluster-size (supporting reads)
 
->Output format:
+Output format:
  
 >target-chr | target-site-cluster | average-length | target-site | readname | start-in-read | insertion-length | overlap/gap
  
+
 
 #### Option: If you want to compare two datasets, and want to extract those specific insertions only in one dataset, you can use:
 
