@@ -1,5 +1,6 @@
 # te-detector
 Detect transposable elements in long DNA reads
+Charaterize TE structures such as target-site duplication and 3'transduction
 
 #### Workflow
 ##### Step1: Install LAST
@@ -24,52 +25,50 @@ lastal -P8 -p reads-wm.par mydb-wm reads.fa | ../bin/last-split -m1 > reads-wm.m
  
  Here we use '-m1' option to keep all alignments: not omitting any alignment whose probability of having the wrong genomic locus is higher than some threshold
  
- ##### Step3: Detect insertions and extract relevant reads
+ 
+ ##### Step3: Collect insertion signals 
  
  ```
- python tedet_insertion.py reads-wm.maf readList
+ python tedet_insertion.py [reads-wm.maf] [insertions]
  ```
  
- readList is a text file with names of reads with insertions.
+ Output format:
  
- ```
- sh extract.sh readList reads.fa > reads_redo.fa
- ```
+ target-chr | target-site | readname | start-in-read | insertion-length | overlap/gap
  
- ##### Step4: Re-align reads_redo.fa carefully without repeat-masking to reference
+ *overlap/gap: >0 gap; <0 overlap
+ 
+ 
+ ##### Step4: Cluster insertion signals by coordinate and length
  
 ```
-lastdb -P8 -uNEAR -R11 -c mydb reference.fa
-
-last-train -P8 -Q0 mydb reads_redo.fa > reads_redo.par
-
-lastal -P8 -p reads_redo.par mydb reads_redo.fa | last-split -m1 > reads_redo.maf
+python cluster-insertion.py [insertions] [cluster-size] [out]
 ```
+Log only clusters with size >= cluster-size (supporting reads)
 
-##### Step5: Re-detect insertions and check whether they can be aligned to annotated TEs
+ Output format:
+ 
+ target-chr | target-site-cluster | average-length | target-site | readname | start-in-read | insertion-length | overlap/gap
+ 
 
-```
-python tedet_anno.py reads_redo.maf rmsk.txt out
-```
-
-Here you can get three output file with prefix 'out' (modifiy it as you want)
-
-
-- **out_insertion**:
+#### Option: If you want to compare two datasets, and want to extract those specific insertions only in one dataset, you can use:
 
 ```
-targetChr | targetSite | readname | insertionStart | insertionEnd | tsdLength | tsdSeq | leftFlankingSeq | rightFlankingSeq
+python diff-cluster.py [cluster1] [cluster2] [cluster1-cluster2]
 ```
 
-Log insertions with abs(tsdLength) <= 30bp
+The output includes insertion clusters in cluster1 but not in cluster2.
 
-tsdLength < 0 means possible target site deletion, which should be check more carefully later.
 
+
+##### Step5: Identify transposable element insertions
+
+```
+python tedet_anno.py [insertion-cluster] [rmsk.txt] [out]
+```
 
 
 - **out_positive_full: (Full TE insertions are logged)**
-
-*Will fix the problem of duplicates later*
 
 > Row 1:
 
@@ -77,7 +76,6 @@ tsdLength < 0 means possible target site deletion, which should be check more ca
 targetChr | targetSite | donorChr | donorStart | donorEnd | readname | readStart | readEnd | insertionStart | insertionEnd
 ```
 
-(Here donorChr: donorStart-donorEnd and readname: readStart-readEnd are aligned)
 
 > Row 2:
 
