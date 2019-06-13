@@ -1,71 +1,58 @@
+from __future__ import print_function
+import itertools as it
 from utilityFunctions import*
+
 
 def getReferenceChr(alignment):
     return alignment.refChr
 
-def tinyOverlap(a1, a2):
-    if abs(a2.refStart - a1.refEnd) <= 20 and (a2.qryStart - a1.qryEnd) >= 100:
-        return True
-    else:
-        return False
+def getStartCoordinates(list):
+    starts = [a.refStart for a in list]
+    for a in list:
+        starts.append(a.refStart)
+    return starts
 
-def largeOverlap(a1, a2):
-    unaligned = a2.qryStart - a1.qryEnd
-    overlap = a1.refEnd - a2.refStart
-    if(a1.refStart < a2.refStart and a2.refEnd > a1.refEnd and a2.refStart < a1.refEnd) and (unaligned >= 100):
-        return True
+def getAjacents(list, a1):
+    res = []
+    starts = [a.refStart for a in list]
+    a1end = a1.refEnd
+    i = bisect.bisect(starts, a1end)
+    if i <= len(list)-1:
+        res.append(i-1)
+        res.append(i)
     else:
-        return False
+        res.append(i-1)
+    return res
 
-def largeGap(a1, a2):
-    unaligned = a2.qryStart - a1.qryEnd
-    gap = a2.refStart - a1.refEnd
-    if gap > 20 and unaligned >= (gap+100):
-        return True
-    else:
-        return False
-
-def findInsertions(f, alignments):
+def collectInsertions(f, alignments):
     logging.info("Checking insertions...\n")
-    #readlist = []
-    insertions = collections.defaultdict(list)
-    #gap = 150
-    #gap = 50
+    insertions = collections.defaultdict(list) 
     for readname in alignments.keys():
         alist = alignments[readname]
-        if len(alist) >= 2:
-            alist.sort(key=operator.attrgetter('qryStart'))
-            for i in range(len(alist)-1):
-                a1, a2 = alist[i], alist[i+1]
-                if(a1.refChr == a2.refChr):
-                    ref = a1.refChr
-                    if tinyOverlap(a1, a2):
-                        inslength = a2.qryStart - a1.qryEnd
-                        tsdd = TSD(a2.refStart - a1.refEnd, None, None, None)
-                        insertion = Insertion(ref, a2.refStart, readname, a1.qryEnd, inslength, tsdd)
-                        insertions[ref].append(insertion)
-                    elif largeOverlap(a1, a2):
+        groupedlistbychr = collections.defaultdict(list)
+        for a in alist:
+            groupedlistbychr[a.refChr].append(a)
+        for refChr in groupedlistbychr.keys():
+            alignsOneRef = groupedlistbychr[refChr]
+            if len(alignsOneRef) >= 2:
+                alignsOneRef.sort(key=operator.attrgetter('refStart'))
+                for a1 in alignsOneRef:
+                    for i in getAjacents(alignsOneRef, a1):
+                        a2 = alignsOneRef[i]
+                        og = a1.refEnd - a2.refStart
                         unaligned = a2.qryStart - a1.qryEnd
-                        overlap = a1.refEnd - a2.refStart
-                        inslength = unaligned + overlap
-                        tsdd =  TSD(-1*overlap, None, None, None)
-                        insertion = Insertion(ref, a2.refStart, readname, a1.qryEnd, inslength, tsdd)
-                        insertions[ref].append(insertion)
-                    elif largeGap(a1, a2):
-                        unaligned = a2.qryStart - a1.qryEnd
-                        gap = a2.refStart - a1.refEnd
-                        inslength = unaligned - gap
-                        tsdd =  TSD(gap, None, None, None)
-                        insertion = Insertion(ref, a2.refStart, readname, a1.qryEnd, inslength, tsdd)
-                        insertions[ref].append(insertion)
+                        if abs(og) <= 500 and unaligned >= 50:
+                            tsdd = TSD(og, None)
+                            insertion = Insertion(refChr, a1.refEnd, readname, a1.qryEnd, unaligned, tsdd)
+                            insertions[refChr].append(insertion)
     for ref in insertions.keys():
         insertions[ref].sort(key=operator.attrgetter('targetSite'))
-    logInsertions(insertions, f)
+    logInsertions(insertions, f)    
 
 
 def tedet_insertions(args): 
     alignments = readAlignments(openAndLog(args[0]))
-    findInsertions(writeAndLog(args[1]), alignments)
+    collectInsertions(writeAndLog(args[1]), alignments)
 
 if __name__ == "__main__":
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)

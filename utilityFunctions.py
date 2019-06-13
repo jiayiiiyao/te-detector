@@ -1,5 +1,4 @@
 from __future__ import print_function
-from itertools import groupby
 import bisect
 import logging
 import collections
@@ -11,10 +10,10 @@ import operator
 
 class Alignment:
     aligncount = 0
-    def __init__(self, refChr, refStart, refEnd, refLen, refSeq,
-                 qryName, qryStart, qryEnd, qryLen, qrySeq):
-        self.refChr, self.refStart, self.refEnd, self.refLen, self.refSeq = refChr, refStart, refEnd, refLen, refSeq
-        self.qryName, self.qryStart, self.qryEnd, self.qryLen, self.qrySeq = qryName, qryStart, qryEnd, qryLen, qrySeq
+    def __init__(self, refChr, refStart, refEnd, refLen, refSeq, refStrand, refFullLen, 
+                 qryName, qryStart, qryEnd, qryLen, qrySeq, qryStrand, qryFullLen):
+        self.refChr, self.refStart, self.refEnd, self.refLen, self.refSeq, self.refStrand, self.refFullLen = refChr, refStart, refEnd, refLen, refSeq, refStrand, refFullLen
+        self.qryName, self.qryStart, self.qryEnd, self.qryLen, self.qrySeq, self.qryStrand, self.qryFullLen = qryName, qryStart, qryEnd, qryLen, qrySeq, qryStrand, qryFullLen
         Alignment.aligncount += 1
 
 class Transposon:
@@ -27,12 +26,12 @@ class Insertion:
 	def __init__(self, targetChr, targetSite, readName, insertionStart, insertionLength, TSD):
 		self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionLength, self.TSD = targetChr, targetSite, readName, insertionStart, insertionLength, TSD
 	def getInfo(self):
-        	data = self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionLength
+        	data = self.targetChr, self.targetSite, self.readName, self.insertionStart, self.insertionLength, self.TSD.length
         	return data
 
 class TSD:
-	def __init__(self, length, seq, left_flanking, right_flanking):
-		self.length, self.seq, self.left_flanking, self.right_flanking = length, seq, left_flanking, right_flanking
+	def __init__(self, length, seq):
+		self.length, self.seq = length, seq
 
 def openAndLog(fileName):
     logging.info("opening " + fileName + "..." + "\n")
@@ -61,18 +60,37 @@ def readBlockFromMaf(lines):
 def parseAlignments(fields):
     name = fields[1]
     start, lens = int(fields[2]), int(fields[3])
+    strand = fields[4]
+    fulllen = int(fields[5])
     seq = fields[6]
     end = start + len(seq) - seq.count('-')
-    return name, start, end, lens, seq
+    return name, start, end, lens, seq, strand, fulllen
 
 def readAlignments(f):
+    maxmismap = 2
     alignments = collections.defaultdict(list)
     blocks = readBlockFromMaf(f)
     for block in blocks:
-        refname, refstart, refend, reflen, refseq = parseAlignments(block[1].split())
-        qryname, qrystart, qryend, qrylen, qryseq = parseAlignments(block[2].split())
-        align = Alignment(refname, refstart, refend, reflen, refseq, qryname, qrystart, qryend, qrylen, qryseq)
-        alignments[qryname].append(align)
+        mismap = float(block[0].split()[2][7:])
+        if mismap <= maxmismap:
+            refname, refstart, refend, reflen, refseq, refStrand, refFullLen = parseAlignments(block[1].split())
+            qryname, qrystart, qryend, qrylen, qryseq, qryStrand, qryFullLen = parseAlignments(block[2].split())
+            align = Alignment(refname, refstart, refend, reflen, refseq, refStrand, refFullLen, qryname, qrystart, qryend, qrylen, qryseq, qryStrand, qryFullLen)
+            alignments[qryname].append(align)
+    return alignments
+
+def readtargetAlignments(f, namelist):
+    maxmismap = 2
+    alignments = collections.defaultdict(list)
+    blocks = readBlockFromMaf(f)
+    for block in blocks:
+        mismap = float(block[0].split()[2][7:])
+        if mismap <= maxmismap:
+            refname, refstart, refend, reflen, refseq, refStrand, refFullLen = parseAlignments(block[1].split())
+            qryname, qrystart, qryend, qrylen, qryseq, qryStrand, qryFullLen = parseAlignments(block[2].split())
+            if qryname in namelist:
+                align = Alignment(refname, refstart, refend, reflen, refseq, refStrand, refFullLen, qryname, qrystart, qryend, qrylen, qryseq, qryStrand, qryFullLen)
+                alignments[qryname].append(align)
     return alignments
 
 def readRepeats(f):
@@ -86,9 +104,30 @@ def readRepeats(f):
             transposon = Transposon(genoName, genoStart, genoEnd, strand, repName, repClass, repFamily)
             repeats[genoName].append(transposon)
     for genoname in repeats.keys():
-       repeats[genoname].sort(key = operator.attrgetter('genoStart'))
+        repeats[genoname].sort(key = operator.attrgetter('genoStart'))
     return repeats
 
+def readRepeatForSimulation(f):
+    repeats = collections.defaultdict(list)
+    for line in f:
+        attributes = line.split()
+        genoName = attributes[0]
+        genoStart, genoEnd = int(attributes[1]), int(attributes[2])
+        strand, repName, repClass, repFamily = attributes[3:]
+        if not repFamily == 'Simple_repeat':
+            transposon = Transposon(genoName, genoStart, genoEnd, strand, repName, repClass, repFamily)
+            repeats[genoName].append(transposon)
+    for genoname in repeats.keys():
+        repeats[genoname].sort(key = operator.attrgetter('genoStart'))
+    return repeats    
+
+def readReadnames(f):
+    readlist = []
+    for line in f:
+        readname = line.split()[5]
+        if readname not in readlist:
+            readlist.append(readname)
+    return readlist
 
 def logNegative(filename, result):
     outfile = writeAndLog(filename)

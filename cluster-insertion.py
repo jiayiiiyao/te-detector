@@ -44,18 +44,18 @@ def clusterInsertion(insertions):
     return clusters
 
 def logCluster(clusters, f, count):
-	for cls in clusters.keys():
-		targetChr, tsite, plength = cls
-		csize = len(clusters[cls])
-		if csize >= count:
+    for cls in clusters.keys():
+        targetChr, tsite, plength = cls
+        csize = len(clusters[cls])
+        if csize >= count:
             avglength = 0
             for insert in clusters[cls]:
                 avglength += getInsLength(insert)
-            avglength = avglength/csize
-			for insert in clusters[cls]:
-				targetChr, targetSite, readname, readStart, length, og = insert 
-				res = targetChr, tsite, avglength, csize, targetSite, readname, readStart, length, og
-				print(*res, sep='\t', end='\n', file=f)
+            avglength = int(avglength/csize)
+            for insert in clusters[cls]:
+                targetChr, targetSite, readname, readStart, length, og = insert 
+                res = targetChr, tsite, avglength, csize, targetSite, readname, readStart, length, og
+                print(*res, sep='\t', end='\n', file=f)
 
 def logInsertionClusters(args):
 	infile, count, outfile = args

@@ -30,20 +30,20 @@ def diffCluster(cluster1, cluster2, outfile):
         found = False
         for cls2 in cluster2:
             chromosome2, clsite2, avglength2 = cls2
-            if (chromosome1 == chromosome2) and (abs(clsite2-cliste1)<= 30) and (abs(avglength1-avglength2)<= 30):
+            if (chromosome1 == chromosome2) and (abs(clsite2-clsite1)<= 30) and (abs(avglength1-avglength2)<= 30):
                 found = True
                 break
         if found == False:
-            for insert in clusters[cls1]:
+            for insert in cluster1[cls1]:
                 tsite, readname, startcoordinate, length, og = insert 
-                res = chromosome1, clsite1, avglength1, len(clusters[cls1]), tsite, readname, startcoordinate, length, og
+                res = chromosome1, clsite1, avglength1, len(cluster1[cls1]), tsite, readname, startcoordinate, length, og
                 print(*res, sep='\t', end='\n', file=outfile)
 
 
 def diff_insertions(args): 
     file1, file2, outfile = args[0], args[1], args[2]
     cluster1, cluster2 = readClusters(openAndLog(file1)), readClusters(openAndLog(file2))
-    logDiffs(diffCluster(cluster1, cluster2), writeAndLog(outfile))
+    diffCluster(cluster1, cluster2, writeAndLog(outfile))
 
 if __name__ == "__main__":
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
