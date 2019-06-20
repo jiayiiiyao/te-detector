@@ -32,7 +32,16 @@ def isIncluded(start, end, qrystart, qryend):
     else:
         return False
 
-def ismapped(alist, start, end, strand):
+def ismapped(alist, start, end):
+    mapped = []
+    for a in alist:
+        qrystart = a.qryStart
+        qryend = a.qryEnd           
+        if isIncluded(start, end, qrystart, qryend):
+            mapped.append(a)
+    return mapped
+
+def ismapped_strand(alist, start, end, strand):
     mapped = []
     for a in alist:
         if a.qryStrand == strand:
@@ -40,7 +49,7 @@ def ismapped(alist, start, end, strand):
             qryend = a.qryEnd
         else:
             qryend = a.qryFullLen - a.qryStart
-            qrystart = a.qryFullLen - a.qryStart - a.qryLen            
+            qrystart = a.qryFullLen - a.qryStart - a.qryLen  
         if isIncluded(start, end, qrystart, qryend):
             mapped.append(a)
     return mapped
@@ -63,20 +72,23 @@ def twoendtruncated(te, m):
     else:
         return False
 
-def getAnnotatedTE(telist, m):
+def teStartpoints(telist):
+    startpoints = []
+    for te in telist:
+        startpoints.append(te.genoStart)   
+    return startpoints
+
+def getAnnotatedTE(telist, m, tslist):
     annotated = []
-    candidates = getCandidateTE(telist, m.refStart)
+    candidates = getCandidateTE(telist, m.refStart, tslist)
     for te in candidates:
         if (te.genoStart >= m.refStart and te.genoStart <= m.refEnd) or (te.genoEnd >= m.refStart and te.genoEnd <= m.refEnd) or (m.refStart >= te.genoStart and m.refEnd <= te.genoEnd):
         #if threeprimeintact(candidate, m) or fiveprimeintact(candidate, m) or twoendtruncated(candidate, m):
             annotated.append(te)
     return annotated
 
-def getCandidateTE(telist, refstart):
-    startpoints = []
+def getCandidateTE(telist, refstart, startpoints):
     tes = []
-    for te in telist:
-        startpoints.append(te.genoStart)
     size = len(startpoints) 
     pos = bisect.bisect_right(startpoints, refstart)
     for i in range(pos - 1, pos + 1):
@@ -86,55 +98,71 @@ def getCandidateTE(telist, refstart):
 
 def checkTransduction(m, insend, te):
     if insend > m.qryEnd:
-        transLength = m.refEnd - te.genoEnd
-        seqstart = m.qryEnd - m.qryStart - transLength
-        transSeq = m.qrySeq[seqstart:]
+        #transLength = m.refEnd - te.genoEnd
+        transLength = insend - m.qryEnd
+        #seqstart = m.qryEnd - m.qryStart - transLength
+       # transSeq = m.qrySeq[seqstart:]
     else:
         transLength = 0
-        transSeq = 'None'
-    return transLength, transSeq
+        #transSeq = 'None'
+    #return transLength, transSeq
+    return transLength
 
 # check if mapped here 
-def catInsertionsFromAlignments(alignments, telists):
+def catInsertionsFromAlignments(alignments, repeats):
     insertions = collections.defaultdict(list)
+    #get sorted TE startpoints array
+    teStartPoints = collections.defaultdict(list)
+    for genoname in repeats.keys():
+        tlist = repeats[genoname]
+        for te in tlist:
+            teStartPoints[genoname].append(te.genoStart)
+    #start
     temapped, tenotmapped, unmapped = [], [], []
     for readname in alignments.keys():
-        alist = alignments[readname]
-        groupedlistbychr = collections.defaultdict(list)
-        for a in alist:
-            groupedlistbychr[a.refChr].append(a)
-        for refChr in groupedlistbychr.keys():
-            alignsOneRef = groupedlistbychr[refChr]
-            if len(alignsOneRef) >= 2:
-                alignsOneRef.sort(key=operator.attrgetter('refStart'))
-                for a1 in alignsOneRef:
-                    for i in getAjacents(alignsOneRef, a1):
-                        a2 = alignsOneRef[i]
+        alignmentsOnOneRead = alignments[readname]
+        groupedAlignbychr = collections.defaultdict(list)
+        for align in alignmentsOnOneRead:
+            groupedAlignbychr[align.refChr].append(align)
+        #groupedAlignbychr
+        for refChr in groupedAlignbychr.keys():
+            alignToeachChr = groupedAlignbychr[refChr]
+            if len(alignToeachChr) >= 2:
+                alignToeachChr.sort(key=operator.attrgetter('refStart'))
+                for a1 in alignToeachChr:
+                    for i in getAjacents(alignToeachChr, a1):
+                        a2 = alignToeachChr[i]
                         og = a1.refEnd - a2.refStart
-                        unaligned = a2.qryStart - a1.qryEnd
-                        if abs(og) <= 500 and unaligned >= 50:
-                            insstart, insend = a1.qryEnd, a2.qryStart
+                        if not a2.qryStrand == a1.qryStrand:
+                            a2qryStart = a2.qryFullLen - a2.qryStart - a2.qryLen 
+                        else:
+                            a2qryStart = a2.qryStart 
+                        unaligned = a2qryStart - a1.qryEnd
+                        if abs(og) <= 200 and unaligned >= 100:
+                            insertStart, insertEnd = a1.qryEnd, a2.qryStart
                             strand = a1.qryStrand
-                            insmapped = ismapped(alist, insstart, insend, strand)
-                            if len(insmapped) == 0:
+                            insMapped = ismapped_strand(alignmentsOnOneRead, insertStart, insertEnd, strand)
+                            if len(insMapped) == 0:
                                 #alien insertion
-                                unmappedIns = refChr, a1.refEnd, readname, insstart, unaligned
+                                unmappedIns = refChr, a1.refEnd, readname, insertStart, unaligned
                                 unmapped.append(unmappedIns)
                             else:
-                                for m in insmapped:
+                                for mapped in insMapped:
                                     tsdLen, tsdSeq = checkTSD(a1, a2)
-                                    mref = m.refChr
-                                    tlist = telists[mref]
-                                    tes = getAnnotatedTE(tlist, m)
+                                    mappedRef = mapped.refChr 
+                                    #print(mappedRef)
+                                    tlist = repeats[mappedRef]
+                                    tslist = teStartPoints[mappedRef]
+                                    tes = getAnnotatedTE(tlist, mapped, tslist)
                                     if len(tes) == 0:
                                         #te negative insertion
-                                        res = refChr, a1.refEnd, a1.qryName, insstart, unaligned, tsdLen, m.qryStart, m.qryEnd-m.qryStart, mref, m.refStart, m.refEnd-m.refStart
+                                        res = refChr, a1.refEnd, a1.qryName, insertStart, unaligned, tsdLen, mapped.qryStart, mapped.qryEnd-mapped.qryStart, mappedRef, mapped.refStart, mapped.refEnd-mapped.refStart
                                         tenotmapped.append(res)
                                     else:
                                         for te in tes:
-                                            transductionLength, transductionSeq = checkTransduction(m, insend, te)
+                                            transductionLength = checkTransduction(mapped, insertEnd, te)
                                             #te positive insertion
-                                            res = refChr, a1.refEnd, a1.qryName, insstart, unaligned, tsdLen, tsdSeq, m.qryStart, m.qryEnd-m.qryStart, mref, m.refStart, m.refEnd-m.refStart, te.repName, te.genoStart, te.genoEnd, transductionLength, transductionSeq
+                                            res = refChr, a1.refEnd, a1.qryName, insertStart, unaligned, tsdLen, tsdSeq, mapped.qryStart, mapped.qryEnd-mapped.qryStart, mappedRef, mapped.refStart, mapped.refEnd-mapped.refStart, te.repName, te.genoStart, te.genoEnd, te.genoEnd - te.genoStart, transductionLength
                                             temapped.append(res)
     return temapped, tenotmapped, unmapped
 
@@ -143,6 +171,7 @@ def catInsertionsFromAlignments(alignments, telists):
 def collectTransposon(args):
     print('start reading alignments...')
     readlist = readReadnames(openAndLog(args[1]))
+    print(len(readlist))
     alignments = readtargetAlignments(openAndLog(args[0]), readlist)
     print('start reading repeats...')
     repeats = readRepeats(openAndLog(args[2]))
@@ -167,17 +196,14 @@ def collectTransposon(args):
     for temap in temapped: 
         #targetchr, targetsite, readname, insertionstart, insertionlength, tsdlength, tsdSeq
         #mapqrystart, mapqrylen, maprefchr, maprefstart, mapreflen
-        #tename, testart, teend
-        #transductionLength, transductionSeq 
+        #tename, testart, teend, transductionLength
         res1 = temap[0:7]
         res2 = temap[7:12] 
-        res3 = temap[12:15] 
-        res4 = temap[15:]
+        res3 = temap[12:] 
         print(*res1, sep='\t', end='\n', file=outfiletp)
         print(*res2, sep='\t', end='\n', file=outfiletp)
         print(*res3, sep='\t', end='\n', file=outfiletp)
-        print(*res4, sep='\t', end='\n', file=outfiletp)
-    outfiletp.write('\n')
+        outfiletp.write('\n')
     outfiletp.close()
 
 

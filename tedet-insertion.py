@@ -40,8 +40,13 @@ def collectInsertions(f, alignments):
                     for i in getAjacents(alignsOneRef, a1):
                         a2 = alignsOneRef[i]
                         og = a1.refEnd - a2.refStart
-                        unaligned = a2.qryStart - a1.qryEnd
-                        if abs(og) <= 500 and unaligned >= 50:
+                        if not a2.qryStrand == a1.qryStrand:
+                            a2qryStart = a2.qryFullLen - a2.qryStart - a2.qryLen 
+                        else:
+                            a2qryStart = a2.qryStart 
+                        unaligned = a2qryStart - a1.qryEnd
+                        #if og >= (-500) and og <= 200 and unaligned >= 50
+                        if abs(og) <= 200 and unaligned >= 100:
                             tsdd = TSD(og, None)
                             insertion = Insertion(refChr, a1.refEnd, readname, a1.qryEnd, unaligned, tsdd)
                             insertions[refChr].append(insertion)

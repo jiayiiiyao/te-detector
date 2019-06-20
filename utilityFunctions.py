@@ -7,6 +7,7 @@ import sys
 import optparse
 import operator
 
+excludeRepeats = ['Simple_repeat', 'Satellite' , 'Low_complexity']
 
 class Alignment:
     aligncount = 0
@@ -67,7 +68,7 @@ def parseAlignments(fields):
     return name, start, end, lens, seq, strand, fulllen
 
 def readAlignments(f):
-    maxmismap = 2
+    maxmismap = 1e-6
     alignments = collections.defaultdict(list)
     blocks = readBlockFromMaf(f)
     for block in blocks:
@@ -75,12 +76,13 @@ def readAlignments(f):
         if mismap <= maxmismap:
             refname, refstart, refend, reflen, refseq, refStrand, refFullLen = parseAlignments(block[1].split())
             qryname, qrystart, qryend, qrylen, qryseq, qryStrand, qryFullLen = parseAlignments(block[2].split())
-            align = Alignment(refname, refstart, refend, reflen, refseq, refStrand, refFullLen, qryname, qrystart, qryend, qrylen, qryseq, qryStrand, qryFullLen)
-            alignments[qryname].append(align)
+            if not (refname.startswith('chrUn') or 'random' in refname):
+                align = Alignment(refname, refstart, refend, reflen, refseq, refStrand, refFullLen, qryname, qrystart, qryend, qrylen, qryseq, qryStrand, qryFullLen)
+                alignments[qryname].append(align)
     return alignments
 
 def readtargetAlignments(f, namelist):
-    maxmismap = 2
+    maxmismap = 0.0001
     alignments = collections.defaultdict(list)
     blocks = readBlockFromMaf(f)
     for block in blocks:
@@ -100,7 +102,8 @@ def readRepeats(f):
         genoName = attributes[5]
         genoStart, genoEnd = int(attributes[6]), int(attributes[7])
         strand, repName, repClass, repFamily = attributes[9:13]
-        if not repFamily == 'Simple_repeat':
+        #if not (repFamily == 'Simple_repeat' or repFamily == 'Satellite' or repFamily == 'Low_complexity'):
+        if not repClass in excludeRepeats:
             transposon = Transposon(genoName, genoStart, genoEnd, strand, repName, repClass, repFamily)
             repeats[genoName].append(transposon)
     for genoname in repeats.keys():
@@ -123,9 +126,15 @@ def readRepeatForSimulation(f):
 
 def readReadnames(f):
     readlist = []
+    chro = "chr0"
+    tsite, length = 0, 0
     for line in f:
-        readname = line.split()[5]
-        if readname not in readlist:
+        attributes = line.split()
+        nchro = attributes[0]
+        ntsite, nlength = int(attributes[1]), int(attributes[2])
+        if not (nchro == chro and ntsite == tsite and nlength == length):
+            chro, tsite, length = nchro, ntsite, nlength
+            readname = attributes[5]
             readlist.append(readname)
     return readlist
 
